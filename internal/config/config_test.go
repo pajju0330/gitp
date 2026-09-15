@@ -13,7 +13,6 @@ func TestLoad_FromEnv(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv(config.EnvDefaultProfile, "from-env")
 
-	// Even with a config file, env wins.
 	dir := filepath.Join(home, config.DirName)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -27,8 +26,8 @@ func TestLoad_FromEnv(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.DefaultProfile != "from-env" {
-		t.Fatalf("got %q", s.DefaultProfile)
+	if s.DefaultProfile != "from-env" || s.EnvDefault != "from-env" || s.FileDefault != "from-file" {
+		t.Fatalf("%+v", s)
 	}
 }
 
@@ -51,8 +50,8 @@ func TestLoad_FromFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.DefaultProfile != "personal" {
-		t.Fatalf("got %q", s.DefaultProfile)
+	if s.DefaultProfile != "personal" || s.FileDefault != "personal" {
+		t.Fatalf("%+v", s)
 	}
 }
 
@@ -67,5 +66,33 @@ func TestLoad_MissingFile(t *testing.T) {
 	}
 	if s.DefaultProfile != "" {
 		t.Fatalf("got %q", s.DefaultProfile)
+	}
+}
+
+func TestSetDefaultProfile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(config.EnvDefaultProfile, "")
+
+	if err := config.SetDefaultProfile("work"); err != nil {
+		t.Fatal(err)
+	}
+	s, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.FileDefault != "work" {
+		t.Fatalf("%+v", s)
+	}
+
+	if err := config.SetDefaultProfile(""); err != nil {
+		t.Fatal(err)
+	}
+	s, err = config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.FileDefault != "" {
+		t.Fatalf("%+v", s)
 	}
 }

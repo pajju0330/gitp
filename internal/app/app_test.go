@@ -20,9 +20,10 @@ func TestRun_HelpAndVersion(t *testing.T) {
 		LoadConfig: func() (config.Settings, error) {
 			return config.Settings{}, nil
 		},
-		Resolve: func(string) (string, error) { return "", nil },
-		Environ: func() []string { return nil },
-		RunGit:  func([]string, []string) error { return errors.New("should not run") },
+		Resolve:     func(string) (string, error) { return "", nil },
+		Environ:     func() []string { return nil },
+		RunGit:      func([]string, []string) error { return errors.New("should not run") },
+		RepoProfile: func([]string) string { return "" },
 	}
 
 	code := app.RunWith(deps, []string{"--help"})
@@ -45,7 +46,7 @@ func TestRun_ExplicitProfileOverridesDefaultAndEnv(t *testing.T) {
 		Stdout: &bytes.Buffer{},
 		Stderr: &bytes.Buffer{},
 		LoadConfig: func() (config.Settings, error) {
-			return config.Settings{DefaultProfile: "default"}, nil
+			return config.Settings{DefaultProfile: "default", FileDefault: "default"}, nil
 		},
 		Resolve: func(name string) (string, error) {
 			if name != "explicit" {
@@ -61,6 +62,7 @@ func TestRun_ExplicitProfileOverridesDefaultAndEnv(t *testing.T) {
 			gotEnv = append([]string{}, env...)
 			return nil
 		},
+		RepoProfile: func([]string) string { return "repo-profile" },
 	}
 
 	code := app.RunWith(deps, []string{"--profile", "explicit", "push", "-u"})
@@ -86,14 +88,15 @@ func TestRun_UsesDefaultProfile(t *testing.T) {
 		Stdout: &bytes.Buffer{},
 		Stderr: &bytes.Buffer{},
 		LoadConfig: func() (config.Settings, error) {
-			return config.Settings{DefaultProfile: "personal"}, nil
+			return config.Settings{DefaultProfile: "personal", FileDefault: "personal"}, nil
 		},
 		Resolve: func(name string) (string, error) {
 			resolved = name
 			return "/home/.gitconfig.personal", nil
 		},
-		Environ: func() []string { return nil },
-		RunGit:  func([]string, []string) error { return nil },
+		Environ:     func() []string { return nil },
+		RunGit:      func([]string, []string) error { return nil },
+		RepoProfile: func([]string) string { return "" },
 	}
 
 	code := app.RunWith(deps, []string{"status"})
@@ -102,6 +105,50 @@ func TestRun_UsesDefaultProfile(t *testing.T) {
 	}
 	if resolved != "personal" {
 		t.Fatalf("resolved=%q", resolved)
+	}
+}
+
+func TestRun_RepoProfileBeatsDefault(t *testing.T) {
+	var resolved string
+	deps := app.Dependencies{
+		Stdout: &bytes.Buffer{},
+		Stderr: &bytes.Buffer{},
+		LoadConfig: func() (config.Settings, error) {
+			return config.Settings{DefaultProfile: "work", FileDefault: "work"}, nil
+		},
+		Resolve: func(name string) (string, error) {
+			resolved = name
+			return "/home/.gitconfig." + name, nil
+		},
+		Environ:     func() []string { return nil },
+		RunGit:      func([]string, []string) error { return nil },
+		RepoProfile: func([]string) string { return "personal" },
+	}
+	code := app.RunWith(deps, []string{"status"})
+	if code != 0 || resolved != "personal" {
+		t.Fatalf("code=%d resolved=%q", code, resolved)
+	}
+}
+
+func TestRun_Verbose(t *testing.T) {
+	stderr := &bytes.Buffer{}
+	deps := app.Dependencies{
+		Stdout: &bytes.Buffer{},
+		Stderr: stderr,
+		LoadConfig: func() (config.Settings, error) {
+			return config.Settings{FileDefault: "personal", DefaultProfile: "personal"}, nil
+		},
+		Resolve:     func(string) (string, error) { return "/tmp/.gitconfig.personal", nil },
+		Environ:     func() []string { return nil },
+		RunGit:      func([]string, []string) error { return nil },
+		RepoProfile: func([]string) string { return "" },
+	}
+	code := app.RunWith(deps, []string{"-v", "status"})
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if !strings.Contains(stderr.String(), "profile=personal") {
+		t.Fatalf("stderr=%q", stderr.String())
 	}
 }
 
@@ -124,6 +171,7 @@ func TestRun_NoProfilePassthrough(t *testing.T) {
 			gotEnv = env
 			return nil
 		},
+		RepoProfile: func([]string) string { return "" },
 	}
 
 	code := app.RunWith(deps, []string{"status"})
@@ -146,8 +194,9 @@ func TestRun_MissingProfileFile(t *testing.T) {
 		Resolve: func(string) (string, error) {
 			return "", errors.New("profile \"x\" not found")
 		},
-		Environ: func() []string { return nil },
-		RunGit:  func([]string, []string) error { return errors.New("should not run") },
+		Environ:     func() []string { return nil },
+		RunGit:      func([]string, []string) error { return errors.New("should not run") },
+		RepoProfile: func([]string) string { return "" },
 	}
 
 	code := app.RunWith(deps, []string{"-p", "x", "status"})

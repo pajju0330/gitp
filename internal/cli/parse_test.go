@@ -79,6 +79,35 @@ func TestParse_MissingProfileValue(t *testing.T) {
 	}
 }
 
+func TestParse_Verbose(t *testing.T) {
+	opts, err := cli.Parse([]string{"-v", "status"})
+	if err != nil || !opts.Verbose {
+		t.Fatalf("%+v %v", opts, err)
+	}
+	assertArgs(t, opts.GitArgs, "status")
+}
+
+func TestParse_GitVerbosePassthrough(t *testing.T) {
+	opts, err := cli.Parse([]string{"commit", "-v"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opts.Verbose {
+		t.Fatal("trailing -v must go to git, not gitp")
+	}
+	assertArgs(t, opts.GitArgs, "commit", "-v")
+}
+
+func TestParse_BuiltinPreserved(t *testing.T) {
+	opts, err := cli.Parse([]string{"--profile", "p", "whoami"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cli.BuiltinName(opts) != "whoami" {
+		t.Fatalf("builtin=%q", cli.BuiltinName(opts))
+	}
+}
+
 func assertArgs(t *testing.T, got []string, want ...string) {
 	t.Helper()
 	if len(got) != len(want) {

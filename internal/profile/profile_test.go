@@ -1,6 +1,7 @@
 package profile_test
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -11,14 +12,14 @@ import (
 
 func TestValid(t *testing.T) {
 	cases := map[string]bool{
-		"personal":     true,
-		"work":         true,
-		"client.acme":  true,
-		"a_b-1":        true,
-		"":             false,
+		"personal":      true,
+		"work":          true,
+		"client.acme":   true,
+		"a_b-1":         true,
+		"":              false,
 		"../etc/passwd": false,
-		"a/b":          false,
-		"has space":    false,
+		"a/b":           false,
+		"has space":     false,
 	}
 	for name, want := range cases {
 		if got := profile.Valid(name); got != want {
@@ -60,5 +61,37 @@ func TestResolve_InvalidName(t *testing.T) {
 	var inv profile.ErrInvalidName
 	if !errors.As(err, &inv) {
 		t.Fatalf("want ErrInvalidName, got %v", err)
+	}
+}
+
+func TestListAndCreate(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("[user]\n\temail = d@e.f\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	path, err := profile.Create("personal", "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal(err)
+	}
+
+	names, err := profile.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(names) != 1 || names[0] != "personal" {
+		t.Fatalf("%v", names)
+	}
+
+	var buf bytes.Buffer
+	if err := profile.Show("personal", &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(buf.Bytes(), []byte("d@e.f")) {
+		t.Fatalf("%s", buf.String())
 	}
 }
